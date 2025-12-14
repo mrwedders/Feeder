@@ -17,20 +17,20 @@ jobs:
       contents: read
     steps:
     - name: perform the checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         submodules: 'recursive'
         fetch-depth: 0
         fetch-tags: true
 
     - name: setup JDK
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v5
       with:
         java-version: '17'
         distribution: 'temurin'
 
     - name: gradle setup
-      uses: gradle/actions/setup-gradle@v4
+      uses: gradle/actions/setup-gradle@v5
       with:
         cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
@@ -45,20 +45,20 @@ jobs:
       contents: read
     steps:
     - name: checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         submodules: 'recursive'
         fetch-depth: 0
         fetch-tags: true
 
     - name: setup JDK
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v5
       with:
         java-version: '17'
         distribution: 'temurin'
 
     - name: gradle setup
-      uses: gradle/actions/setup-gradle@v4
+      uses: gradle/actions/setup-gradle@v5
       with:
         # needed for configuration task cache
         cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
@@ -77,20 +77,20 @@ jobs:
       contents: read
     steps:
     - name: checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         submodules: 'recursive'
         fetch-depth: 0
         fetch-tags: true
 
     - name: setup JDK
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v5
       with:
         java-version: '17'
         distribution: 'temurin'
 
     - name: gradle setup
-      uses: gradle/actions/setup-gradle@v4
+      uses: gradle/actions/setup-gradle@v5
       with:
         cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
@@ -105,20 +105,20 @@ jobs:
       contents: read
     steps:
     - name: checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         submodules: 'recursive'
         fetch-depth: 0
         fetch-tags: true
 
     - name: setup JDK
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v5
       with:
         java-version: '17'
         distribution: 'temurin'
 
     - name: gradle setup
-      uses: gradle/actions/setup-gradle@v4
+      uses: gradle/actions/setup-gradle@v5
       with:
         cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
@@ -132,7 +132,7 @@ jobs:
       contents: read
     steps:
     - name: checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         submodules: 'recursive'
         fetch-depth: 0
@@ -151,13 +151,13 @@ jobs:
         KEYALIAS: ${{ secrets.KEYALIAS }}
 
     - name: setup JDK
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v5
       with:
         java-version: '17'
         distribution: 'temurin'
 
     - name: gradle setup
-      uses: gradle/actions/setup-gradle@v4
+      uses: gradle/actions/setup-gradle@v5
       with:
         cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
@@ -165,7 +165,7 @@ jobs:
       run: ./gradlew assembleFdroidRelease
 
     - name: save fdroid apk
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: fdroid-apk
         retention-days: 1
@@ -178,7 +178,7 @@ jobs:
       contents: read
     steps:
     - name: checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         submodules: 'recursive'
         fetch-depth: 0
@@ -197,13 +197,13 @@ jobs:
         KEYALIAS: ${{ secrets.KEYALIAS }}
 
     - name: setup JDK
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v5
       with:
         java-version: '17'
         distribution: 'temurin'
 
     - name: gradle setup
-      uses: gradle/actions/setup-gradle@v4
+      uses: gradle/actions/setup-gradle@v5
       with:
         cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
@@ -211,7 +211,7 @@ jobs:
       run: ./gradlew assemblePlayRelease
 
     - name: save play apk
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: play-apk
         retention-days: 1
@@ -224,20 +224,20 @@ jobs:
       contents: read
     steps:
     - name: checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         submodules: 'recursive'
         fetch-depth: 0
         fetch-tags: true
 
     - name: setup JDK
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v5
       with:
         java-version: '17'
         distribution: 'temurin'
 
     - name: gradle setup
-      uses: gradle/actions/setup-gradle@v4
+      uses: gradle/actions/setup-gradle@v5
       with:
         cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
@@ -257,7 +257,7 @@ jobs:
       run: ./gradlew bundlePlayRelease
 
     - name: save bundle
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v5
       with:
         name: bundle
         retention-days: 1
@@ -324,11 +324,15 @@ jobs:
       contents: read
     steps:
     - name: checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         submodules: 'recursive'
         fetch-depth: 0
         fetch-tags: true
+    - name: Healthcheck start
+      env:
+        HC_PING_URL: ${{ secrets.HC_PING_URL }}
+      run: curl -X GET "$HC_PING_URL/start"
 
     - name: prepare for build
       shell: bash
@@ -341,13 +345,18 @@ jobs:
         KEYALIAS: ${{ secrets.KEYALIAS }}
 
     - name: copy bundle
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v6
       with:
         name: bundle
         path: app/build/outputs/
 
     - name: deploy production
       run: ./deploy_playstore_fast.sh
+
+    - name: Healthcheck end
+      env:
+        HC_PING_URL: ${{ secrets.HC_PING_URL }}
+      run: curl -X GET "$HC_PING_URL"
 
   deploy_beta:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
@@ -367,11 +376,15 @@ jobs:
       contents: read
     steps:
       - name: checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: 'recursive'
           fetch-depth: 0
           fetch-tags: true
+      - name: Healthcheck start
+        env:
+          HC_PING_URL: ${{ secrets.HC_PING_URL }}
+        run: ci/run-if-not-release curl -X GET "$HC_PING_URL/start"
 
       - name: prepare for build
         shell: bash
@@ -384,7 +397,7 @@ jobs:
           KEYALIAS: ${{ secrets.KEYALIAS }}
 
       - name: copy bundle
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: bundle
           path: app/build/outputs/
@@ -392,6 +405,11 @@ jobs:
       - name: deploy beta
         # do not want this to run on master commit which is also a tag
         run: ci/run-if-not-release ./deploy_playstore_fast.sh
+
+      - name: Healthcheck end
+        env:
+          HC_PING_URL: ${{ secrets.HC_PING_URL }}
+        run: ci/run-if-not-release curl -X GET "$HC_PING_URL"
 
   github-release:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
@@ -402,7 +420,7 @@ jobs:
       contents: write
     steps:
       - name: perform the checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: 'recursive'
           fetch-depth: 0
@@ -412,12 +430,12 @@ jobs:
         run: mkdir -p build && ci/latest-changelog.py CHANGELOG.md > build/release_notes.md
 
       - name: copy fdroid apk
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: fdroid-apk
 
       - name: copy play apk
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           name: play-apk
 

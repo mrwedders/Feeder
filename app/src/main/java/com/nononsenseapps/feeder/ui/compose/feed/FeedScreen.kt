@@ -40,7 +40,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CheckBox
 import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.Close
@@ -82,7 +81,6 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -91,9 +89,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CollectionInfo
 import androidx.compose.ui.semantics.CollectionItemInfo
@@ -115,7 +111,6 @@ import com.nononsenseapps.feeder.ApplicationCoroutineScope
 import com.nononsenseapps.feeder.R
 import com.nononsenseapps.feeder.archmodel.FeedItemStyle
 import com.nononsenseapps.feeder.archmodel.FeedType
-import com.nononsenseapps.feeder.db.FAR_FUTURE
 import com.nononsenseapps.feeder.db.room.FeedItemCursor
 import com.nononsenseapps.feeder.db.room.ID_SAVED_ARTICLES
 import com.nononsenseapps.feeder.db.room.ID_UNSET
@@ -135,6 +130,7 @@ import com.nononsenseapps.feeder.ui.compose.feedarticle.onlyUnreadAndSaved
 import com.nononsenseapps.feeder.ui.compose.material3.DrawerState
 import com.nononsenseapps.feeder.ui.compose.material3.DrawerValue
 import com.nononsenseapps.feeder.ui.compose.material3.rememberDrawerState
+import com.nononsenseapps.feeder.ui.compose.modifiers.trackVisibility
 import com.nononsenseapps.feeder.ui.compose.navdrawer.ScreenWithNavDrawer
 import com.nononsenseapps.feeder.ui.compose.navigation.ArticleDestination
 import com.nononsenseapps.feeder.ui.compose.navigation.EditFeedDestination
@@ -151,12 +147,9 @@ import com.nononsenseapps.feeder.ui.compose.utils.ImmutableHolder
 import com.nononsenseapps.feeder.ui.compose.utils.addMargin
 import com.nononsenseapps.feeder.ui.compose.utils.isCompactDevice
 import com.nononsenseapps.feeder.ui.compose.utils.onKeyEventLikeEscape
-import com.nononsenseapps.feeder.ui.compose.utils.rememberIsItemMostlyVisible
 import com.nononsenseapps.feeder.util.ActivityLauncher
 import com.nononsenseapps.feeder.util.ToastMaker
-import com.nononsenseapps.feeder.util.openGithubIssues
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
+import com.nononsenseapps.feeder.util.logDebug
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.kodein.di.compose.LocalDI
@@ -325,12 +318,6 @@ fun FeedScreen(
             onSettings = {
                 SettingsDestination.navigate(navController)
             },
-            onSendFeedback = {
-                activityLauncher.startActivity(
-                    openAdjacentIfSuitable = true,
-                    intent = openGithubIssues(),
-                )
-            },
             onImport = {
                 try {
                     opmlImporter.launch(
@@ -373,11 +360,11 @@ fun FeedScreen(
                 }
             },
             drawerState = drawerState,
-            markAsUnread = { itemId, unread, feedOrTag ->
+            markAsUnread = { itemId, unread ->
                 if (unread) {
                     viewModel.markAsUnread(itemId)
                 } else {
-                    viewModel.markAsRead(itemId, feedOrTag)
+                    viewModel.markAsRead(itemId)
                 }
             },
             markAsReadOnSwipe = { itemId, unread, saved ->
@@ -397,7 +384,7 @@ fun FeedScreen(
                     }
 
                     else -> {
-                        viewModel.markAsRead(itemId, null)
+                        viewModel.markAsRead(itemId)
                     }
                 }
             },
@@ -456,12 +443,11 @@ fun FeedScreen(
     onShowDeleteDialog: () -> Unit,
     onDismissDeleteDialog: () -> Unit,
     onSettings: () -> Unit,
-    onSendFeedback: () -> Unit,
     onImport: () -> Unit,
     onExportOPML: () -> Unit,
     onExportSavedArticles: () -> Unit,
     drawerState: DrawerState,
-    markAsUnread: (Long, Boolean, FeedOrTag?) -> Unit,
+    markAsUnread: (Long, Boolean) -> Unit,
     markAsReadOnSwipe: (id: Long, unread: Boolean, saved: Boolean) -> Unit,
     markBeforeAsRead: (FeedItemCursor) -> Unit,
     markAfterAsRead: (FeedItemCursor) -> Unit,
@@ -874,22 +860,6 @@ fun FeedScreen(
                                     Text(stringResource(id = R.string.action_settings))
                                 },
                             )
-                            HorizontalDivider()
-                            DropdownMenuItem(
-                                onClick = {
-                                    onShowToolbarMenu(false)
-                                    onSendFeedback()
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        Icons.Default.BugReport,
-                                        contentDescription = null,
-                                    )
-                                },
-                                text = {
-                                    Text(stringResource(id = R.string.send_bug_report))
-                                },
-                            )
                             // Hidden button for TalkBack
                             DropdownMenuItem(
                                 onClick = {
@@ -1178,7 +1148,7 @@ fun FeedListContent(
     viewState: FeedScreenViewState,
     onOpenNavDrawer: () -> Unit,
     onAddFeed: () -> Unit,
-    markAsUnread: (Long, Boolean, FeedOrTag?) -> Unit,
+    markAsUnread: (Long, Boolean) -> Unit,
     markAsReadOnSwipe: (id: Long, unread: Boolean, saved: Boolean) -> Unit,
     markBeforeAsRead: (FeedItemCursor) -> Unit,
     markAfterAsRead: (FeedItemCursor) -> Unit,
@@ -1225,12 +1195,6 @@ fun FeedListContent(
             exit = fadeOut(),
             visible = viewState.haveVisibleFeedItems,
         ) {
-            val screenHeightPx =
-                with(LocalDensity.current) {
-                    LocalConfiguration.current.screenHeightDp.dp
-                        .toPx()
-                        .toInt()
-                }
             LazyColumn(
                 state = listState,
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -1276,18 +1240,20 @@ fun FeedListContent(
                 ) { itemIndex ->
                     val previewItem = pagedFeedItems[itemIndex] ?: PLACEHOLDER_ITEM
 
-                    if (viewState.markAsReadOnScroll && previewItem.unread) {
-                        val mostlyVisible: Boolean by listState.rememberIsItemMostlyVisible(
-                            key = previewItem.id,
-                            screenHeightPx = screenHeightPx,
-                        )
-                        MarkItemAsReadOnScroll(
-                            itemId = previewItem.id,
-                            mostlyVisible = mostlyVisible,
-                            currentFeedOrTag = viewState.currentFeedOrTag,
-                            coroutineScope = coroutineScope,
-                            markAsRead = markAsUnread,
-                        )
+                    val itemCoroutineScope = rememberCoroutineScope()
+                    var itemWasVisible by remember(previewItem.id) { mutableStateOf(false) }
+
+                    // Gets executed when only unread items are being shown
+                    // Marks items which have been visible as read when they scroll off screen
+                    DisposableEffect(previewItem.id, markAsUnread) {
+                        onDispose {
+                            if (itemWasVisible) {
+                                coroutineScope.launch {
+                                    logDebug(LOG_TAG, "Marking ${previewItem.id} as read")
+                                    markAsUnread(previewItem.id, false)
+                                }
+                            }
+                        }
                     }
 
                     SwipeableFeedItemPreview(
@@ -1343,6 +1309,7 @@ fun FeedListContent(
                         },
                         modifier =
                             Modifier
+                                .animateItem(fadeInSpec = null, fadeOutSpec = null)
                                 .safeSemantics {
                                     collectionItemInfo =
                                         CollectionItemInfo(
@@ -1351,7 +1318,31 @@ fun FeedListContent(
                                             columnIndex = 1,
                                             columnSpan = 1,
                                         )
+                                }.let { modifier ->
+                                    if (viewState.markAsReadOnScroll && previewItem.unread) {
+                                        modifier.trackVisibility(0.9f) { info ->
+                                            if (info.isAboveThreshold) {
+                                                // Using itemCoroutineScope because that scope gets destroyed when item scrolls off screen
+                                                // So implicitly, if user is scrolling very fast, the coroutine will be cancelled
+                                                // before marking as read
+                                                itemCoroutineScope.launch {
+                                                    delay(REQUIRED_VISIBLE_TIME_FOR_MARK_AS_READ)
+                                                    if (viewState.filter.unread) {
+                                                        logDebug(LOG_TAG, "Item $itemIndex marking as wasVisible")
+                                                        itemWasVisible = true
+                                                        // Marks as read in disposable effect
+                                                    } else {
+                                                        logDebug(LOG_TAG, "Item $itemIndex marking as read")
+                                                        markAsUnread(previewItem.id, false)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        modifier
+                                    }
                                 },
+                        swipeEnabled = !listState.isScrollInProgress,
                     )
 
                     if (viewState.feedItemStyle != FeedItemStyle.CARD &&
@@ -1394,7 +1385,7 @@ fun FeedGridContent(
     viewState: FeedScreenViewState,
     onOpenNavDrawer: () -> Unit,
     onAddFeed: () -> Unit,
-    markAsUnread: (Long, Boolean, FeedOrTag?) -> Unit,
+    markAsUnread: (Long, Boolean) -> Unit,
     markAsReadOnSwipe: (id: Long, unread: Boolean, saved: Boolean) -> Unit,
     markBeforeAsRead: (FeedItemCursor) -> Unit,
     markAfterAsRead: (FeedItemCursor) -> Unit,
@@ -1406,13 +1397,6 @@ fun FeedGridContent(
 ) {
     val coroutineScope = rememberCoroutineScope()
     val activityLauncher: ActivityLauncher by LocalDI.current.instance()
-
-    val screenHeightPx =
-        with(LocalDensity.current) {
-            LocalConfiguration.current.screenHeightDp.dp
-                .toPx()
-                .toInt()
-        }
 
     Box(modifier = modifier) {
         AnimatedVisibility(
@@ -1472,20 +1456,20 @@ fun FeedGridContent(
                 ) { itemIndex ->
                     val previewItem = pagedFeedItems[itemIndex] ?: PLACEHOLDER_ITEM
 
-                    // Very important that items don't change size or disappear when scrolling
-                    // Placeholder will have no id
-                    if (previewItem.id > ID_UNSET && viewState.markAsReadOnScroll && previewItem.unread) {
-                        val mostlyVisible: Boolean by gridState.rememberIsItemMostlyVisible(
-                            key = previewItem.id,
-                            screenHeightPx = screenHeightPx,
-                        )
-                        MarkItemAsReadOnScroll(
-                            itemId = previewItem.id,
-                            mostlyVisible = mostlyVisible,
-                            currentFeedOrTag = viewState.currentFeedOrTag,
-                            coroutineScope = coroutineScope,
-                            markAsRead = markAsUnread,
-                        )
+                    val itemCoroutineScope = rememberCoroutineScope()
+                    var itemWasVisible by remember(previewItem.id) { mutableStateOf(false) }
+
+                    // Gets executed when only unread items are being shown
+                    // Marks items which have been visible as read when they scroll off screen
+                    DisposableEffect(previewItem.id, markAsUnread) {
+                        onDispose {
+                            if (itemWasVisible) {
+                                coroutineScope.launch {
+                                    logDebug(LOG_TAG, "Marking ${previewItem.id} as read")
+                                    markAsUnread(previewItem.id, false)
+                                }
+                            }
+                        }
                     }
 
                     SwipeableFeedItemPreview(
@@ -1539,6 +1523,31 @@ fun FeedGridContent(
                         {
                             onItemClick(previewItem.id)
                         },
+                        modifier =
+                            if (viewState.markAsReadOnScroll && previewItem.unread) {
+                                Modifier
+                                    .trackVisibility(0.9f) { info ->
+                                        if (info.isAboveThreshold) {
+                                            // Using itemCoroutineScope because that scope gets destroyed when item scrolls off screen
+                                            // So implicitly, if user is scrolling very fast, the coroutine will be cancelled
+                                            // before marking as read
+                                            itemCoroutineScope.launch {
+                                                delay(REQUIRED_VISIBLE_TIME_FOR_MARK_AS_READ)
+                                                if (viewState.filter.unread) {
+                                                    logDebug(LOG_TAG, "Item $itemIndex marking as wasVisible")
+                                                    itemWasVisible = true
+                                                    // Marks as read in disposable effect
+                                                } else {
+                                                    logDebug(LOG_TAG, "Item $itemIndex marking as read")
+                                                    markAsUnread(previewItem.id, false)
+                                                }
+                                            }
+                                        }
+                                    }.animateItem(fadeInSpec = null, fadeOutSpec = null)
+                            } else {
+                                Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)
+                            },
+                        swipeEnabled = !gridState.isScrollInProgress,
                     )
                 }
             }
@@ -1580,58 +1589,6 @@ fun <T : Any> LazyPagingItems<T>.rememberLazyListState(): LazyListState {
         else ->
             androidx.compose.foundation.lazy
                 .rememberLazyListState()
-    }
-}
-
-/**
- * @param itemId id of item to mark as read
- * @param mostlyVisible if item is mostly visible
- * @param currentFeedOrTag current feed or tag at the time of display
- * @param coroutineScope a scope which will be cancelled when navigated away from feed screen
- * @param markAsRead action to run
- */
-@Composable
-fun MarkItemAsReadOnScroll(
-    itemId: Long,
-    mostlyVisible: Boolean,
-    currentFeedOrTag: FeedOrTag,
-    coroutineScope: CoroutineScope,
-    markAsRead: (Long, Boolean, FeedOrTag?) -> Unit,
-) {
-    // Lambda parameters in a @Composable that are referenced directly inside of restarting effects can cause issues or unpredictable behavior.
-    val markAsReadCallback by rememberUpdatedState(newValue = markAsRead)
-    var visibleTime by remember {
-        mutableStateOf(FAR_FUTURE)
-    }
-    LaunchedEffect(mostlyVisible) {
-        if (mostlyVisible && visibleTime == FAR_FUTURE) {
-            visibleTime = Instant.now()
-        }
-    }
-
-    DisposableEffect(visibleTime) {
-        onDispose {
-            // Check time BEFORE delaying action
-            if (visibleTime.isBefore(Instant.now().minusMillis(REQUIRED_VISIBLE_TIME_FOR_MARK_AS_READ))) {
-                coroutineScope.launch(Dispatchers.IO) {
-                    // Why Coroutine? Why a delay?
-                    // Because this scope will be cancelled if the screen
-                    // is navigated away from and I only want things to be marked
-                    // during scroll - not during navigation.
-                    // Navigating between feeds is a special case, which is
-                    // why the currentFeedOrTag needs to be passed to the
-                    // view model.
-                    @Suppress("UNNECESSARYVARIABLE")
-                    val feedOrTag = currentFeedOrTag
-                    delay(100)
-                    markAsReadCallback(
-                        itemId,
-                        false,
-                        feedOrTag,
-                    )
-                }
-            }
-        }
     }
 }
 

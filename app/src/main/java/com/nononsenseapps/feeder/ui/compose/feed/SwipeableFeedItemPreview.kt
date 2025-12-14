@@ -1,13 +1,14 @@
 package com.nononsenseapps.feeder.ui.compose.feed
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.AnchoredDraggableState
+import androidx.compose.foundation.gestures.DraggableAnchors
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.anchoredDraggable
+import androidx.compose.foundation.gestures.animateTo
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -15,14 +16,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.ExperimentalMaterialApi
-import androidx.compose.material.FractionalThreshold
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.rememberSwipeableState
-import androidx.compose.material.swipeable
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -35,9 +33,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -58,7 +60,6 @@ import com.nononsenseapps.feeder.ui.compose.theme.SwipingItemToUnreadColor
 import com.nononsenseapps.feeder.ui.compose.utils.isCompactLandscape
 import com.nononsenseapps.feeder.util.logDebug
 import kotlinx.coroutines.launch
-import kotlin.math.absoluteValue
 import kotlin.math.roundToInt
 
 private const val LOG_TAG = "FEEDER_SWIPEITEM"
@@ -67,10 +68,6 @@ private const val LOG_TAG = "FEEDER_SWIPEITEM"
  * OnSwipe takes a boolean parameter of the current read state of the item - so that it can be
  * called multiple times by several DisposableEffects.
  */
-@OptIn(
-    ExperimentalFoundationApi::class,
-    ExperimentalMaterialApi::class,
-)
 @Composable
 fun SwipeableFeedItemPreview(
     onSwipe: (Boolean) -> Unit,
@@ -89,16 +86,16 @@ fun SwipeableFeedItemPreview(
     onShareItem: () -> Unit,
     onItemClick: () -> Unit,
     modifier: Modifier = Modifier,
+    swipeEnabled: Boolean = true,
 ) {
     val coroutineScope = rememberCoroutineScope()
     val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
-    val swipeableState = rememberSwipeableState(initialValue = FeedItemSwipeState.NONE)
+    val anchoredDraggableState = remember { AnchoredDraggableState(FeedItemSwipeState.CENTER) }
     val onSwipeCallback by rememberUpdatedState(newValue = onSwipe)
 
     val color by animateColorAsState(
         targetValue =
             when {
-                swipeableState.targetValue == FeedItemSwipeState.NONE -> Color.Transparent
                 item.unread || filter.onlyUnread -> SwipingItemToReadColor
                 else -> SwipingItemToUnreadColor
             },
@@ -107,23 +104,30 @@ fun SwipeableFeedItemPreview(
 
     LaunchedEffect(filter, item.unread) {
         // critical state changes - reset ui state
-        swipeableState.animateTo(FeedItemSwipeState.NONE)
+        if (anchoredDraggableState.currentValue != FeedItemSwipeState.CENTER) {
+            anchoredDraggableState.animateTo(FeedItemSwipeState.CENTER)
+        }
     }
 
-    LaunchedEffect(swipeableState.currentValue, swipeableState.isAnimationRunning) {
-        if (!swipeableState.isAnimationRunning && swipeableState.currentValue != FeedItemSwipeState.NONE) {
+    var skipHapticFeedback by remember { mutableStateOf(false) }
+    LaunchedEffect(anchoredDraggableState.settledValue) {
+        if (anchoredDraggableState.settledValue != FeedItemSwipeState.CENTER) {
             logDebug(LOG_TAG, "onSwipe ${item.unread}")
+            if (!filter.onlyUnread) {
+                skipHapticFeedback = true
+                anchoredDraggableState.animateTo(FeedItemSwipeState.CENTER)
+            }
+
             onSwipeCallback(item.unread)
         }
     }
 
-    var swipeIconAlignment by remember { mutableStateOf(Alignment.CenterStart) }
-    // Launched effect because I don't want a value change to zero to change the variable
-    LaunchedEffect(swipeableState.direction) {
-        if (swipeableState.direction == 1f) {
-            swipeIconAlignment = Alignment.CenterStart
-        } else if (swipeableState.direction == -1f) {
-            swipeIconAlignment = Alignment.CenterEnd
+    val swipeIconAlignment by remember {
+        derivedStateOf {
+            when {
+                anchoredDraggableState.offset > 0 -> Alignment.CenterStart
+                else -> Alignment.CenterEnd
+            }
         }
     }
 
@@ -156,7 +160,13 @@ fun SwipeableFeedItemPreview(
         modifier =
             modifier
                 .width(dimens.maxContentWidth)
-                .combinedClickable(
+                .clip(
+                    shape =
+                        when (feedItemStyle) {
+                            FeedItemStyle.COMPACT, FeedItemStyle.SUPER_COMPACT -> RectangleShape
+                            else -> MaterialTheme.shapes.medium
+                        },
+                ).combinedClickable(
                     onLongClick = {
                         dropDownMenuExpanded = true
                     },
@@ -199,39 +209,49 @@ fun SwipeableFeedItemPreview(
             with(LocalDensity.current) {
                 maxWidth.toPx()
             }
+
+        val hapticFeedback = LocalHapticFeedback.current
+        LaunchedEffect(anchoredDraggableState.currentValue) {
+            try {
+                if (anchoredDraggableState.requireOffset() == 0f) {
+                    return@LaunchedEffect
+                }
+            } catch (_: IllegalStateException) {
+                return@LaunchedEffect
+            }
+
+            if (skipHapticFeedback) {
+                skipHapticFeedback = false
+                return@LaunchedEffect
+            }
+
+            hapticFeedback.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
+        }
+
+        val alpha by animateFloatAsState(
+            targetValue = if (anchoredDraggableState.currentValue != FeedItemSwipeState.CENTER) 1.0f else 0.2f,
+            animationSpec = tween(),
+            label = "alphaAnimation",
+        )
+
         Box(
             contentAlignment = swipeIconAlignment,
             modifier =
                 Modifier
                     .matchParentSize()
-                    .background(color)
-                    .padding(horizontal = 24.dp),
+                    .graphicsLayer {
+                        this.alpha = alpha
+                    }.drawBehind {
+                        drawRect(color = color)
+                    }.padding(horizontal = 24.dp),
         ) {
-            AnimatedVisibility(
-                visible = swipeableState.targetValue != FeedItemSwipeState.NONE,
-                enter = fadeIn(),
-                exit = fadeOut(),
-            ) {
-                Icon(
-                    when (item.unread) {
-                        true -> Icons.Default.VisibilityOff
-                        false -> Icons.Default.Visibility
-                    },
-                    contentDescription = null,
-                )
-            }
-        }
-
-        val itemAlpha by remember(swipeableState.progress) {
-            derivedStateOf {
-                if (swipeableState.progress.to == FeedItemSwipeState.NONE) {
-                    1f
-                } else if (swipeableState.progress.from != FeedItemSwipeState.NONE) {
-                    0f
-                } else {
-                    (1f - swipeableState.progress.fraction.absoluteValue).coerceIn(0f, 1f)
-                }
-            }
+            Icon(
+                when (item.unread) {
+                    true -> Icons.Default.VisibilityOff
+                    false -> Icons.Default.Visibility
+                },
+                contentDescription = null,
+            )
         }
 
         val compactLandscape = isCompactLandscape()
@@ -252,9 +272,13 @@ fun SwipeableFeedItemPreview(
                     showOnlyTitle = showOnlyTitle,
                     showReadingTime = showReadingTime,
                     modifier =
-                        Modifier
-                            .offset { IntOffset(swipeableState.offset.value.roundToInt(), 0) }
-                            .graphicsLayer(alpha = itemAlpha),
+                        Modifier.offset {
+                            try {
+                                IntOffset(anchoredDraggableState.requireOffset().roundToInt(), 0)
+                            } catch (_: IllegalStateException) {
+                                IntOffset(0, 0)
+                            }
+                        },
                 )
             }
 
@@ -270,9 +294,13 @@ fun SwipeableFeedItemPreview(
                             showReadingTime = showReadingTime,
                         ),
                     modifier =
-                        Modifier
-                            .offset { IntOffset(swipeableState.offset.value.roundToInt(), 0) }
-                            .graphicsLayer(alpha = itemAlpha),
+                        Modifier.offset {
+                            try {
+                                IntOffset(anchoredDraggableState.requireOffset().roundToInt(), 0)
+                            } catch (_: IllegalStateException) {
+                                IntOffset(0, 0)
+                            }
+                        },
                     onEvent = { event ->
                         when (event) {
                             FeedItemEvent.DismissDropdown -> {
@@ -302,9 +330,13 @@ fun SwipeableFeedItemPreview(
                     showOnlyTitle = showOnlyTitle,
                     showReadingTime = showReadingTime,
                     modifier =
-                        Modifier
-                            .offset { IntOffset(swipeableState.offset.value.roundToInt(), 0) }
-                            .graphicsLayer(alpha = itemAlpha),
+                        Modifier.offset {
+                            try {
+                                IntOffset(anchoredDraggableState.requireOffset().roundToInt(), 0)
+                            } catch (_: IllegalStateException) {
+                                IntOffset(0, 0)
+                            }
+                        },
                     imageWidth =
                         when (compactLandscape) {
                             true -> 196.dp
@@ -327,9 +359,13 @@ fun SwipeableFeedItemPreview(
                     showOnlyTitle = showOnlyTitle,
                     showReadingTime = showReadingTime,
                     modifier =
-                        Modifier
-                            .offset { IntOffset(swipeableState.offset.value.roundToInt(), 0) }
-                            .graphicsLayer(alpha = itemAlpha),
+                        Modifier.offset {
+                            try {
+                                IntOffset(anchoredDraggableState.requireOffset().roundToInt(), 0)
+                            } catch (_: IllegalStateException) {
+                                IntOffset(0, 0)
+                            }
+                        },
                 )
             }
         }
@@ -343,7 +379,6 @@ fun SwipeableFeedItemPreview(
                     Modifier
                         .matchParentSize(),
             ) {
-                val anchors = mutableMapOf(0f to FeedItemSwipeState.NONE)
                 Box(
                     modifier =
                         Modifier
@@ -357,7 +392,6 @@ fun SwipeableFeedItemPreview(
                                             .width(0.dp)
 
                                     SwipeAsRead.ONLY_FROM_END -> {
-                                        anchors[-maxWidthPx] = FeedItemSwipeState.LEFT
                                         this
                                             .fillMaxHeight()
                                             .width(this@BoxWithConstraints.maxWidth / 4)
@@ -365,31 +399,41 @@ fun SwipeableFeedItemPreview(
                                     }
 
                                     SwipeAsRead.FROM_ANYWHERE -> {
-                                        anchors[-maxWidthPx] = FeedItemSwipeState.LEFT
-                                        anchors[maxWidthPx] = FeedItemSwipeState.RIGHT
                                         this
                                             .padding(start = 48.dp)
                                             .matchParentSize()
                                     }
                                 }
-                            }.swipeable(
-                                state = swipeableState,
-                                anchors = anchors,
+                            }.anchoredDraggable(
+                                state = anchoredDraggableState,
                                 orientation = Orientation.Horizontal,
                                 reverseDirection = isRtl,
-                                velocityThreshold = 1000.dp,
-                                thresholds = { _, _ ->
-                                    FractionalThreshold(0.50f)
-                                },
+                                enabled = swipeEnabled,
                             ),
                 )
+
+                // Dividing the maxWidth by 2 means you only have to swipe a quarter of the screen width to reach the swipe threshold, instead of a full half of the screen by default.
+                LaunchedEffect(swipeAsRead) {
+                    anchoredDraggableState.updateAnchors(
+                        DraggableAnchors {
+                            if (swipeAsRead == SwipeAsRead.ONLY_FROM_END) {
+                                FeedItemSwipeState.START at -(maxWidthPx / 2)
+                                FeedItemSwipeState.CENTER at 0f
+                            } else if (swipeAsRead == SwipeAsRead.FROM_ANYWHERE) {
+                                FeedItemSwipeState.START at -(maxWidthPx / 2)
+                                FeedItemSwipeState.CENTER at 0f
+                                FeedItemSwipeState.END at maxWidthPx / 2
+                            }
+                        },
+                    )
+                }
             }
         }
     }
 }
 
 enum class FeedItemSwipeState {
-    NONE,
-    LEFT,
-    RIGHT,
+    CENTER,
+    START,
+    END,
 }

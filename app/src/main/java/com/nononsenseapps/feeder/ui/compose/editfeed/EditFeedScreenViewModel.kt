@@ -14,8 +14,6 @@ import com.nononsenseapps.feeder.background.runOnceRssSync
 import com.nononsenseapps.feeder.base.DIAwareViewModel
 import com.nononsenseapps.feeder.db.room.Feed
 import com.nononsenseapps.feeder.ui.compose.utils.mutableSavedStateOf
-import com.nononsenseapps.feeder.util.getOrCreateFromUri
-import com.nononsenseapps.feeder.util.isNostrUri
 import kotlinx.coroutines.launch
 import org.kodein.di.DI
 import org.kodein.di.instance
@@ -48,6 +46,7 @@ class EditFeedScreenViewModel(
     override var notify: Boolean by mutableSavedStateOf(state, false)
     override var articleOpener: String by mutableSavedStateOf(state, "")
     override var alternateId: Boolean by mutableSavedStateOf(state, false)
+    override var summarizeOnOpen: Boolean by mutableSavedStateOf(state, false)
     override var allTags: List<String> by mutableStateOf(emptyList())
 
     override var feedImage: String by mutableStateOf("")
@@ -110,6 +109,9 @@ class EditFeedScreenViewModel(
             if (!state.contains("alternateId")) {
                 alternateId = feed.alternateId
             }
+            if (!state.contains("summarizeOnOpen")) {
+                summarizeOnOpen = feed.summarizeOnOpen
+            }
 
             repository.allTags
                 .collect { value ->
@@ -126,15 +128,16 @@ class EditFeedScreenViewModel(
 
             val updatedFeed =
                 feed.copy(
-                    url = URL(feedUrl.getOrCreateFromUri()),
+                    url = URL(feedUrl),
                     title = feedTitle,
                     customTitle = feedTitle,
                     tag = feedTag,
-                    fullTextByDefault = if (feedUrl.isNostrUri()) false else fullTextByDefault,
+                    fullTextByDefault = fullTextByDefault,
                     notify = notify,
                     skipDuplicates = skipDuplicates,
                     openArticlesWith = articleOpener,
                     alternateId = alternateId,
+                    summarizeOnOpen = summarizeOnOpen,
                 )
 
             // No point in doing anything unless they actually differ
@@ -158,12 +161,8 @@ class EditFeedScreenViewModel(
 
 internal fun isValidUrlOrUri(value: String): Boolean =
     try {
-        if (value.isNostrUri()) {
-            true
-        } else {
-            URL(value)
-            true
-        }
-    } catch (e: Exception) {
+        URL(value)
+        true
+    } catch (_: Exception) {
         false
     }

@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -18,27 +20,35 @@ val commitCount by project.extra {
         .toInt()
 }
 
-val latestTag by project.extra {
-    providers
-        .exec {
-            commandLine("git", "describe")
-        }.standardOutput.asText
-        .get()
-        .trim()
-}
+val kotlinToolchainVersion =
+    JavaVersion
+        .current()
+        .majorVersion
+        .toIntOrNull()
+        ?.takeIf { JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_17) }
+        ?.coerceAtLeast(17)
+        ?: 17
 
 android {
     namespace = "com.nononsenseapps.feeder"
-    compileSdk = 35
+    compileSdk =
+        libs.versions.compileSdk
+            .get()
+            .toInt()
 
     defaultConfig {
         applicationId = "com.nononsenseapps.feeder"
         // The version fields are set with actual values to support F-Droid
-        // In Play variant, they are overriden and taken from git.
-        versionCode = 3623
-        versionName = "2.10.2"
-        minSdk = 23
-        targetSdk = 35
+        // In Play variant, they are overridden and taken from git to support alpha/beta testing.
+        // For actual releases they match.
+        versionCode = 3858
+        versionName = "2.16.1"
+        // TLS1.3 is enabled in Android 10 (29) and above
+        minSdk = 29
+        targetSdk =
+            libs.versions.compileSdk
+                .get()
+                .toInt()
 
         vectorDrawables.useSupportLibrary = true
 
@@ -46,6 +56,13 @@ android {
 
         // For espresso tests
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    dependenciesInfo {
+        // Disables dependency metadata when building APKs (not wanted for reproducible builds)
+        includeInApk = false
+        // Disables dependency metadata when building Android App Bundles
+        includeInBundle = false
     }
 
     ksp {
@@ -119,7 +136,7 @@ android {
             }
             create("play") {
                 dimension = "store"
-                versionName = "2.10.2"
+                versionName = "2.16.1"
                 versionCode = commitCount
                 applicationIdSuffix = ".play"
             }
@@ -130,7 +147,7 @@ android {
             isReturnDefaultValues = true
         }
         managedDevices {
-            devices {
+            allDevices {
                 maybeCreate<com.android.build.api.dsl.ManagedVirtualDevice>("pixel2api30").apply {
                     // Use device profiles you typically see in Android Studio.
                     device = "Pixel 2"
@@ -138,13 +155,10 @@ android {
                     apiLevel = 30
                     // To include Google services, use "google".
                     systemImageSource = "aosp-atd"
+                    testedAbi = "x86"
                 }
             }
         }
-    }
-
-    kotlinOptions {
-        jvmTarget = "11"
     }
 
     compileOptions {
@@ -209,9 +223,10 @@ composeCompiler {
 }
 
 kotlin {
-    jvmToolchain(17)
+    jvmToolchain(kotlinToolchainVersion)
     compilerOptions {
         allWarningsAsErrors = false
+        jvmTarget = JvmTarget.JVM_11
     }
 }
 
@@ -248,9 +263,6 @@ dependencies {
     implementation(libs.bundles.kotlin)
     implementation(libs.openai.client)
     implementation(libs.ktor.client.okhttp)
-
-    // Nostr
-    implementation(libs.rust.nostr)
 
     // Markdown
     implementation(libs.jetbrains.markdown)

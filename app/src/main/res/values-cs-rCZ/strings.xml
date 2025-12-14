@@ -250,7 +250,7 @@
     <string name="feed_item_style_compact_card">Kompaktní karty</string>
     <string name="touch_to_play_audio">Dotykem přehrajete zvuk</string>
     <string name="show_title_unread_count">Zobrazit počet nepřečtených článků v nadpisu</string>
-    <string name="openai_settings">Integrace OpenAI</string>
+    <string name="openai_settings">Integrace AI</string>
     <string name="model_id">Id modelu</string>
     <string name="azure_api_version">Verze API Azure</string>
     <string name="api_key">Klíč API</string>
@@ -266,4 +266,22 @@
     <string name="cancel_search">Zrušit vyhledávání</string>
     <string name="on">Zapnout</string>
     <string name="off">Vypnout</string>
+    <string name="text">Text</string>
+    <string name="font">Font</string>
+    <string name="text_preview">Náhled textu</string>
+    <string name="system_default">Výchozí nastavení systému</string>
+    <string name="weight">Váha</string>
+    <string name="add_font">Přidat font…</string>
+    <string name="bold">Tučné</string>
+    <string name="italic">Kurzíva</string>
+    <string name="text_settings">Nastavení textu</string>
+    <string name="could_not_add_font">Nepodařilo se přidat font</string>
+    <string name="could_not_remove_font">Nepodařilo se smazat font</string>
+    <string name="something_went_wrong">Něco se nepovedlo</string>
+    <string name="time_out">Časový limit (sekundy)</string>
+    <string name="time_out_placeholder">Časový limit pro AI požadavky</string>
+    <string name="time_out_validation_error">Časový limit musí být v rozmezí 30 až 600 sekund</string>
+    <string name="summarize_on_open">Shrnout při otevření</string>
+    <string name="feed_search_suggestions_header">Návrhy</string>
+    <string name="openai_settings_info">Kompatibilní s mnoha AI poskytovateli (ale ne se všemi)</string>
 </resources>

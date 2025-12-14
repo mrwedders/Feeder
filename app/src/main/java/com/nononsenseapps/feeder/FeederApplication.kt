@@ -4,7 +4,6 @@ import android.app.Application
 import android.app.job.JobScheduler
 import android.content.ContentResolver
 import android.content.SharedPreferences
-import android.util.Log
 import android.widget.Toast
 import androidx.core.app.NotificationManagerCompat
 import androidx.preference.PreferenceManager
@@ -14,6 +13,7 @@ import coil3.SingletonImageLoader
 import coil3.annotation.ExperimentalCoilApi
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
+import coil3.memoryCacheMaxSizePercentWhileInBackground
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import coil3.request.crossfade
 import coil3.request.maxBitmapSize
@@ -53,7 +53,6 @@ import okhttp3.Cache
 import okhttp3.CacheControl
 import okhttp3.OkHttpClient
 import okio.Path.Companion.toOkioPath
-import org.conscrypt.Conscrypt
 import org.kodein.di.DI
 import org.kodein.di.DIAware
 import org.kodein.di.bind
@@ -61,7 +60,6 @@ import org.kodein.di.direct
 import org.kodein.di.instance
 import org.kodein.di.singleton
 import java.io.File
-import java.security.Security
 import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalCoilApi::class)
@@ -121,7 +119,7 @@ class FeederApplication :
                 val filePathProvider = instance<FilePathProvider>()
                 cachingHttpClient(
                     cacheDirectory = filePathProvider.httpCacheDir,
-                    cacheSize = 25L * 1024 * 1024,
+                    cacheSize = 200L * 1024 * 1024,
                 ) {
                     addNetworkInterceptor(UserAgentInterceptor)
                     addNetworkInterceptor(RateLimitedInterceptor)
@@ -154,7 +152,7 @@ class FeederApplication :
                         .newBuilder()
                         // Use a separate cache for images so we don't evict feed responses
                         // Note that coil has its own cache, so this is only for the network
-                        .cache(Cache(filePathProvider.httpImageCacheDir, 25L * 1024 * 1024))
+                        .cache(Cache(filePathProvider.httpImageCacheDir, 300L * 1024 * 1024))
                         .addInterceptor(AlwaysUseCacheIfPossibleRequestsInterceptor)
                         .addInterceptor { chain ->
                             chain.proceed(
@@ -183,16 +181,17 @@ class FeederApplication :
                     .crossfade(true)
                     .coroutineContext(applicationCoroutineScope.coroutineContext)
                     .maxBitmapSize(Size(2500, 2500))
+                    .memoryCacheMaxSizePercentWhileInBackground(0.05)
                     .diskCache(
                         DiskCache
                             .Builder()
                             .directory(filePathProvider.imageCacheDir.toOkioPath())
-                            .maxSizeBytes(250L * 1024 * 1024)
+                            .maxSizeBytes(200L * 1024 * 1024)
                             .build(),
                     ).memoryCache {
                         MemoryCache
                             .Builder()
-                            .maxSizeBytes(50 * 1024 * 1024)
+                            .maxSizeBytes(100 * 1024 * 1024)
                             .build()
                     }.components {
                         add(OneImageRequestPerHostInterceptor)
@@ -210,17 +209,6 @@ class FeederApplication :
         import(networkModule)
         bind<TTSStateHolder>() with instance(ttsStateHolder)
         bind<NotificationsWorker>() with singleton { NotificationsWorker(di) }
-    }
-
-    init {
-        // Install Conscrypt to handle TLSv1.3 pre Android10
-        // This crashes if app is installed to SD-card. Since it should still work for many
-        // devices, try to ignore errors
-        try {
-            Security.insertProviderAt(Conscrypt.newProvider(), 1)
-        } catch (t: Throwable) {
-            Log.e(LOG_TAG, "Failed to insert Conscrypt. Attempt to ignore.", t)
-        }
     }
 
     override fun onCreate() {

@@ -11,6 +11,7 @@ import com.nononsenseapps.feeder.archmodel.LinkOpener
 import com.nononsenseapps.feeder.archmodel.OpenAISettings
 import com.nononsenseapps.feeder.archmodel.Repository
 import com.nononsenseapps.feeder.archmodel.TextToDisplay
+import com.nononsenseapps.feeder.background.runOnceRssSync
 import com.nononsenseapps.feeder.base.DIAwareViewModel
 import com.nononsenseapps.feeder.blob.blobFile
 import com.nononsenseapps.feeder.blob.blobFullFile
@@ -176,6 +177,21 @@ class ArticleViewModel(
             initialValue = ArticleState(),
         )
 
+    init {
+        viewModelScope.launch {
+            articleFlow.collect { article ->
+                val feedId = article?.item?.feedId
+                if (feedId != null) {
+                    val feed = repository.getFeed(feedId)
+                    if (feed?.summarizeOnOpen == true) {
+                        summarize()
+                        return@collect // Only summarize on first load
+                    }
+                }
+            }
+        }
+    }
+
     private suspend fun parseArticleContent(
         article: Article,
         fullText: Boolean,
@@ -204,7 +220,14 @@ class ArticleViewModel(
                                 LinearArticle(elements = emptyList())
                             }
                         } else {
-                            Log.e(LOG_TAG, "No default file to parse")
+                            Log.e(LOG_TAG, "No default file to parse. Attempting to fetch feed again")
+                            // Should not happen but keeping this as a fallback
+                            runOnceRssSync(
+                                di = di,
+                                feedId = article.feedId,
+                                forceNetwork = true,
+                                triggeredByUser = true,
+                            )
                             textToDisplay.update { TextToDisplay.CONTENT }
                             htmlLinearizer.linearize(
                                 "Sorry, due to a coding oversight, " +

@@ -1,6 +1,5 @@
 package com.nononsenseapps.feeder.util
 
-import com.nononsenseapps.feeder.ui.NOSTR_URI_PREFIX
 import java.net.MalformedURLException
 import java.net.URI
 import java.net.URISyntaxException
@@ -41,6 +40,10 @@ fun sloppyLinkToStrictURLOrNull(url: String): URL? =
     } catch (_: MalformedURLException) {
         null
     }
+
+fun urlHasNoAuthParams(url: URL): Boolean = url.userInfo == null || url.userInfo.isEmpty()
+
+fun urlHasNoQueryParams(url: URL): Boolean = url.query?.isEmpty() != false
 
 /**
  * Returns a URL but does not guarantee that it accurately represents the input string if the input string is an invalid URL.
@@ -99,9 +102,3 @@ fun relativeLinkIntoAbsoluteOrThrow(
     } catch (_: MalformedURLException) {
         URL(base, link)
     }
-
-fun String.isNostrUri(): Boolean = startsWith(NOSTR_URI_PREFIX) && length > NOSTR_URI_PREFIX.length
-
-fun URL.isAdaptedUrlFromNostrUri(): Boolean = this.toString().startsWith("https://njump.me")
-
-fun String.getOrCreateFromUri(): String = if (isNostrUri()) "https://njump.me/$this" else this

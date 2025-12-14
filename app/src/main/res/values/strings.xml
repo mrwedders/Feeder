@@ -19,6 +19,7 @@
   <string name="empty_feed_open"><annotation style="link">Open</annotation> another feed?</string>
   <string name="empty_feed_add"><annotation style="link">Add</annotation> more feeds?</string>
   <string name="search_feed_empty_hint">Enter a feed address</string>
+  <string name="feed_search_suggestions_header">Suggestions</string>
   <string name="mark_as_read">Mark as read</string>
   <string name="mark_as_unread">Mark as unread</string>
   <string name="mark_all_as_read">Mark all as read</string>
@@ -228,6 +229,9 @@
   <string name="failed_to_fetch_full_article_missing_link">Feed is missing link to article</string>
   <string name="failed_to_fetch_full_article_not_html">Link is not an HTML document</string>
   <string name="max_lines">Max lines</string>
+  <string name="time_out">Timeout (seconds)</string>
+  <string name="time_out_validation_error">Timeout must be between 30 and 600 seconds</string>
+  <string name="time_out_placeholder">Timeout for AI requests</string>
   <string name="filter_noun">Filter</string>
   <string name="recently_read_adjective">Recently read</string>
   <string name="read_adjective">Read</string>
@@ -263,8 +267,10 @@
   <string name="skip_duplicate_articles">Skip duplicate articles</string>
   <string name="skip_duplicate_articles_desc">Articles with links or titles identical to existing articles are ignored</string>
   <string name="summarize">Summarize</string>
-  <string name="openai_settings">OpenAI integration</string>
-  <string name="api_key">API Key</string>
+  <string name="summarize_on_open">Summarize on open</string>
+  <string name="openai_settings">AI integration</string>
+  <string name="openai_settings_info">Compatible with many AI providers, but not all</string>
+  <string name="api_key">API key</string>
   <string name="model_id">Model Id</string>
   <string name="azure_api_version">Azure API version</string>
   <string name="touch_to_play_audio">Touch to play audio</string>
